@@ -337,7 +337,7 @@
                             <span class="sdg-chip">{{ explode(' – ', $s)[0] }}</span>
                         @endforeach
                         @if(count($rec->sdg ?? []) > 2)
-                            <span style="font-size:10.5px;color:var(--text-muted);">+{{ count($rec->sdg) - 2 }}</span>
+                            <span title="{{ implode(', ', $rec->sdg ?? []) }}" data-bs-toggle="tooltip" style="font-size:10.5px;color:var(--text-muted);">+{{ count($rec->sdg) - 2 }}</span>
                         @endif
                     </td>
 
@@ -469,7 +469,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
         if (excelBtn) excelBtn.href = qs ? excelBase + '?' + qs : excelBase;
     }
 
-    function submit() {
+    function submitForm() {
         syncExportLinks();
         if (spinner) spinner.style.display = 'flex';
         form.submit();
@@ -478,10 +478,14 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
     // Sync immediately on page load (in case filters are pre-filled)
     syncExportLinks();
 
-    // Search box — debounce 600ms, restore cursor after reload
+    // Auto-submit when filter selects or date inputs change
+    form.querySelectorAll('select, input[type="date"]').forEach(el => {
+        el.addEventListener('change', submitForm);
+    });
+
+    // Search box — submit on Enter and keep focus state on reload
     const searchInput = form.querySelector('input[name="search"]');
 
-    // Auto-focus search if it has a value and no cursor was saved
     if (searchInput && searchInput.value && !sessionStorage.getItem('searchCursor')) {
         searchInput.focus();
         const len = searchInput.value.length;
@@ -489,11 +493,10 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
     }
 
     if (searchInput) {
-        // Submit on Enter key
         searchInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                submit();
+                submitForm();
             }
         });
     }

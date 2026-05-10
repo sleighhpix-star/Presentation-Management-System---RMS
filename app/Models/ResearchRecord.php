@@ -82,15 +82,22 @@ class ResearchRecord extends Model
         $query->when($filters['classification'] ?? null,       fn($q,$v)=>$v==='__empty__' ? $q->whereNull('classification')->orWhere('classification','') : $q->whereRaw('LOWER(classification) = LOWER(?)',[$v]));
         $query->when($filters['presentation_support'] ?? null, fn($q,$v)=>$v==='__empty__' ? $q->whereNull('presentation_support')->orWhere('presentation_support','') : $q->whereRaw('LOWER(presentation_support) = LOWER(?)',[$v]));
         $query->when($filters['source_of_fund'] ?? null,       fn($q,$v)=>$v==='__empty__' ? $q->whereNull('source_of_fund')->orWhere('source_of_fund','') : $q->whereRaw('LOWER(source_of_fund) = LOWER(?)',[$v]));
+
+        // ── FIX: SDG filter using PostgreSQL JSONB containment operator ──
+        // The sdg column stores plain integer arrays e.g. [4], [9,3], [9,12]
+        // The old regex pattern '"4"[^0-9]' expected quoted numbers which never
+        // exist in integer JSON arrays — so it always returned zero results.
+        // Solution: cast to jsonb and use the @> (contains) operator instead.
         $query->when($filters['sdg'] ?? null, function($q, $v) {
             preg_match('/\d+/', $v, $m);
             $num = $m[0] ?? null;
             if ($num) {
-                // Match "2" exactly — not "12" or "20"
-                // PostgreSQL regex: "2" not followed by a digit
-                $q->whereRaw("sdg::text ~ ?", ['"' . $num . '"[^0-9]']);
+                // sdg::jsonb @> '[4]'::jsonb  →  true when array contains integer 4
+                // Works correctly for single values [4] and multi-values [9,4], [9,4,12]
+                $q->whereRaw("sdg::jsonb @> ?::jsonb", [json_encode([(int)$num])]);
             }
         });
+
         $query->when($filters['date_from_filter'] ?? null, function($q,$v) {
             $q->whereRaw("date_from >= ?", [$v]);
         });
